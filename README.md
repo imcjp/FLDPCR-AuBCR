@@ -22,6 +22,4 @@ The software environment of the source code requires **Python3**, and parts of t
 2. The design of AuBCR is based on a rigorous theoretical derivation. Limited by the length of the paper, we show the relevant theoretical derivations in [**proof.pdf**](proof.pdf).
 3. FL-DPCR framework is implemented in the folder "fldpcr", including server for the collaborator (server.py) and client for the participants (priClient.py for private FL and flClient.py for non-private FL), as well as some auxiliary codes in folder "utils".
 4. We provide a script "main.m" to help users quickly implement FL-DPCR using our code. In this script, we provide multiple DPCR models, including SimpleMech, TwoLevel, BinMech, FDA, BCRG, ABCRG as well as our proposed AuBCRComp (note: AuBCR means $\left( k,N \right)$-AuBCR Model that supports $2^k$ releases).
-5. The folder "dpcrpy" and "opacus_dpcr" are for implementing DPCR and private learning with DPCR. They are from [**Opacus-DPCR**](https://github.com/imcjp/Opacus-DPCR). Also, you can install our achievements with "pip" command as follows:
-+ pip install **dpcrpy**
-+ pip install **opacus_dpcr**
+5. The folder "dpcrpy" and "opacus_dpcr" are for implementing DPCR and private learning with DPCR. They are from [**Opacus-DPCR**](https://github.com/imcjp/Opacus-DPCR).
