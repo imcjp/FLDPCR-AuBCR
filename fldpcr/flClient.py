@@ -33,7 +33,7 @@ class FLClient(object):
 
     def setup(self, **client_config):
         """Set up common configuration of each client; called by center server."""
-        batch_size=client_config["sample_rate"]*self.data.tensors[0].size(0);
+        batch_size=client_config["sample_rate"]*len(self.data);
         batch_size=max(round(batch_size),1)
         self.dataloader = DataLoader(self.data, batch_size=batch_size, shuffle=True)
         self.local_epoch = client_config["num_local_epochs"]
@@ -99,4 +99,4 @@ class FLClient(object):
         return self._dt_local_weight
 
     def getDatasetSize(self):
-        return self.data.tensors[0].size(0);
+        return len(self.data)

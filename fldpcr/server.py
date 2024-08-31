@@ -19,7 +19,7 @@ import copy
 import gc
 import numpy as np
 import torch
-
+import argparse
 from multiprocessing import pool, cpu_count
 from torch.utils.data import DataLoader
 from collections import OrderedDict
@@ -66,7 +66,6 @@ class Server(object):
             self.model = ModuleValidator.fix(self.model)
 
         self.device = global_config["device"]
-        self.mp_flag = global_config["is_mp"]
         if global_config["usingDP"]:
             self.ClientClass = PriClient
         else:
@@ -89,6 +88,9 @@ class Server(object):
         self.optim_config = optim_config
         self.dp_config = dp_config
         self.dpcr_model = dpcr_model
+
+        self.mia_enable = False
+        self.batch_size = 10
 
     def setup(self, **init_kwargs):
         """Set up all configuration for federated learning."""
@@ -123,6 +125,126 @@ class Server(object):
 
         # send the model skeleton to all clients
         self.initClientModel()
+
+    def mia_init(self, mia_config, model_config):
+        self.mia_enable = True
+        # Get dataset size
+        num_samples = len(self.data)
+        indices = list(range(num_samples))
+        np.random.shuffle(indices)
+        #######################################################
+        victimId = mia_config['victim_id']
+        client = self.clients[victimId]
+        local_data = client.data
+        #######################################################
+        sizes = [0] * 3
+        sizes[0] = client.getDatasetSize()
+        sizes[1] = sizes[2] = int((num_samples - sizes[0]) / 2)
+        splits = []
+        current_idx = 0
+        for size in sizes:
+            splits.append(indices[current_idx:current_idx + size])
+            current_idx += size
+
+        subTest = torch.utils.data.Subset(self.data, splits[0])
+        shadowTrain = torch.utils.data.Subset(self.data, splits[1])
+        shadowTest = torch.utils.data.Subset(self.data, splits[2])
+        train_batch_size = int(self.sample_rate * len(shadowTrain))
+
+        from fldpcr.utils.mia import mia_helper
+        mia = mia_helper(mia_config, self.device)
+        mia.set_datasets(shadowTrain, shadowTest)
+        shadowModel0 = models.gen(self.modelName, model_config["args"] if "args" in model_config else None)
+        mia.train_shadow_model(shadowModel0, train_batch_size, self.batch_size)
+        num_classes = 10
+        mia.build_attack_model(num_classes, train_batch_size)
+        mia.set_victim_datasets(local_data, subTest, self.batch_size)
+
+        miaInfo = {}
+        miaInfo['victimId'] = victimId
+        miaInfo['mia'] = mia
+        miaInfo['model_for_victim'] = None
+        miaInfo['mia_accuracy'] = []
+        self.miaInfo = argparse.Namespace(**miaInfo)
+
+    def update_selected_clients_with_mia(self, sampled_client_indices):
+        """Call "client_update" function of each selected client."""
+        # update selected clients
+        message = f"[Round: {str(self._round).zfill(4)}] Start updating selected {len(sampled_client_indices)} clients...!"
+        printOnRunning(message);
+        del message;
+        gc.collect()
+
+        selected_total_size = 0
+        param_dict = self.model.state_dict()
+
+        ##############################################################
+        victimId = self.miaInfo.victimId
+        if self.miaInfo.model_for_victim == None:
+            self.miaInfo.model_for_victim = copy.deepcopy(self.model)
+        ##############################################################
+
+        for idx in sampled_client_indices:
+            if idx == victimId:
+                self.clients[idx].client_update(self.miaInfo.model_for_victim.state_dict())
+            else:
+                self.clients[idx].client_update(param_dict)
+
+        message = f"[Round: {str(self._round).zfill(4)}] ...{len(sampled_client_indices)} clients are selected and updated (with total sample size: {str(selected_total_size)})!"
+        printOnRunning(message)
+        del message;
+        gc.collect()
+
+    def aggregateAfterAccumulation_with_mia(self, sampled_client_indices, coefficients):
+        """Average the updated and transmitted parameters from each selected client."""
+        message = f"[Round: {str(self._round).zfill(4)}] Aggregate updated weights of {len(sampled_client_indices)} clients...!"
+        printOnRunning(message);
+        del message;
+        gc.collect()
+
+        ##############################################################
+        victimId = self.miaInfo.victimId
+        # The victim is not involved in the aggregation
+        coefficients[victimId] = 0
+        coefficients = coefficients / np.sum(coefficients)
+
+        mia = self.miaInfo.mia
+        client = self.clients[victimId]
+
+        model_for_victim = self.miaInfo.model_for_victim
+        local_weights_k = client.lastLocalModelChange
+        modelDict_k = model_for_victim.state_dict()
+        for key in self.model.state_dict().keys():
+            modelDict_k[key] += local_weights_k[key]
+
+        mia.attack(model_for_victim)
+        acc = mia.get_mia_acc()
+        self.miaInfo.mia_accuracy.append(acc)
+        ##############################################################
+
+        averaged_weights = OrderedDict()
+        for it, idx in enumerate(sampled_client_indices):
+            local_weights = self.clients[idx].lastLocalModelChange
+            for key in self.model.state_dict().keys():
+                client_weight = coefficients[it] * local_weights[key]
+                if it == 0:
+                    averaged_weights[key] = client_weight
+                else:
+                    averaged_weights[key] += client_weight
+        modelDict = self.model.state_dict()
+        for key in self.model.state_dict().keys():
+            if not modelDict[key].dtype == averaged_weights[key].dtype:
+                printOnRunning(f'The type of {key} does not match, perform a forced conversion.')
+                averaged_weights[key] = averaged_weights[key].type_as(modelDict[key])
+            modelDict[key] += averaged_weights[key]
+        # self.model.load_state_dict(averaged_weights)
+        message = f"[Round: {str(self._round).zfill(4)}] ...updated weights of {len(sampled_client_indices)} clients are successfully averaged!"
+        printOnRunning(message);
+        del message;
+        gc.collect()
+
+    def get_mia_acc(self):
+        return self.miaInfo.mia_accuracy
 
     def create_clients(self, local_datasets):
         """Initialize each Client instance."""
@@ -247,7 +369,6 @@ class Server(object):
         printOnRunning(message);
         del message;
         gc.collect()
-        # 如果对coefficients归一化，则保持其与FedAvg一样
         coefficients = coefficients / np.sum(coefficients)
 
         averaged_weights = OrderedDict()
@@ -263,7 +384,7 @@ class Server(object):
         modelDict = self.model.state_dict()
         for key in self.model.state_dict().keys():
             if not modelDict[key].dtype==averaged_weights[key].dtype:
-                printOnRunning(f'{key} 类型不匹配，执行强制转换')
+                printOnRunning(f'The type of {key} does not match, perform a forced conversion.')
                 averaged_weights[key]=averaged_weights[key].type_as(modelDict[key])
             modelDict[key] += averaged_weights[key]
         # self.model.load_state_dict(averaged_weights)
@@ -281,17 +402,18 @@ class Server(object):
         printOnRunning(sampled_client_indices)
 
         # updated selected clients with local dataset
-        if self.mp_flag:
-            self.param_dict = self.model.state_dict()
-            with pool.ThreadPool(processes=cpu_count() - 1) as workhorse:
-                workhorse.map(self.mp_update_selected_clients, sampled_client_indices)
+        if self.mia_enable:
+            self.update_selected_clients_with_mia(sampled_client_indices)
         else:
             self.update_selected_clients(sampled_client_indices)
 
         mixing_coefficients = [self.clients[idx].getDatasetSize() / self.total_data_size for idx in
                                sampled_client_indices]
         # average each updated model parameters of the selected clients and update the global model
-        self.aggregateAfterAccumulation(sampled_client_indices, mixing_coefficients)
+        if self.mia_enable:
+            self.aggregateAfterAccumulation_with_mia(sampled_client_indices, mixing_coefficients)
+        else:
+            self.aggregateAfterAccumulation(sampled_client_indices, mixing_coefficients)
 
         return True;
 

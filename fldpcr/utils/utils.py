@@ -21,6 +21,7 @@ import torch.nn as nn
 import torch.nn.init as init
 
 from torch.utils.data import Dataset
+from torchvision import transforms
 import torchvision
 
 def init_weights(model, init_type, init_gain):
@@ -108,7 +109,10 @@ def create_datasets(data_path, dataset_name, num_clients, num_shards, iid,datase
                 ]
             )
         elif dataset_name in ["MNIST","FashionMNIST"]:
-            transform = torchvision.transforms.ToTensor()
+            transform = transforms.Compose([
+                transforms.ToTensor(),
+                # transforms.Normalize((0.1307,), (0.3081,))
+            ])
         
         # prepare raw training & test datasets
         training_dataset = torchvision.datasets.__dict__[dataset_name](

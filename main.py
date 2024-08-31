@@ -17,15 +17,18 @@
 ##########################################################################
 from fldpcr.server import Server
 
-def bestK(t,func):
-    mi=2**50;
-    res=-1
+
+def bestK(t, func):
+    mi = 2 ** 50;
+    res = -1
     for k in range(40):
-        r=func(k);
-        if abs(r-t)<mi:
-            mi=abs(r-t)
-            res=k;
+        r = func(k);
+        if abs(r - t) < mi:
+            mi = abs(r - t)
+            res = k;
     return res
+
+
 def runFLDPCR(configs):
     ## Configuration Information
     global_config = configs["global_config"]
@@ -36,22 +39,30 @@ def runFLDPCR(configs):
     model_config = configs["model_config"]
     dp_config = configs["dp_config"]
     dpcr_model = configs["dpcr_model"]
+    mia_config = configs["mia"]
 
     message = "\n[WELCOME] Unfolding configurations...!"
     print(message);
     for key in configs:
-        print({key:configs[key]});
+        print({key: configs[key]});
 
     ## Start Run
     # initialize federated learning
-    central_server = Server(model_config, global_config, data_config, init_config, fed_config, optim_config,dp_config,dpcr_model)
+    central_server = Server(model_config, global_config, data_config, init_config, fed_config, optim_config, dp_config,
+                            dpcr_model)
     central_server.setup()
+    if mia_config['enable']:
+        central_server.mia_init(mia_config, model_config)
 
     # do federated learning
     central_server.fit()
+    if mia_config['enable']:
+        mia_acc = central_server.get_mia_acc()[-1]
+        print(f'MIA ACC after learning: {mia_acc * 100:.3f}%')
 
     message = "...done all learning process!\n...exit program!"
     print(message);
+
 
 if __name__ == '__main__':
     # Set experimental parameters
@@ -61,24 +72,23 @@ if __name__ == '__main__':
             # The communication round number is indicated by fed_config.R
             # Otherwise, the federated learning is without privacy.
             'usingDP': True,
-            'device': 'cuda',   #GPU or CPU
-            'is_mp': False  # If True, training can be done in parallel using multiple threads
-
+            'device': 'cuda',  # GPU or CPU
         },
-        'data_config': { # dataset infomation.
+        'data_config': {  # dataset infomation.
             'data_path': 'data',
-            'dataset_name': 'CIFAR10', #Available Datasets: MNIST, FashionMNIST, CIFAR10
+            'dataset_name': 'CIFAR10',  # Available Datasets: MNIST, FashionMNIST, CIFAR10
             'num_shards': 200,
         },
         'fed_config': {
-            'C': 1, #Percentage of participants participating in training per communication round
-            'K': 20,    #Number of participants
-            'R': 20000, #Maximum communication rounds. It may be less than actual communication rounds due to exhaustion of privacy budget.
-            'E': 100,   #Internal iteration number
-            'sample_rate': 0.01, #Sampling rate of each iteration
+            'C': 1,  # Percentage of participants participating in training per communication round
+            'K': 20,  # Number of participants
+            # Maximum communication rounds. It may be less than actual communication rounds due to exhaustion of privacy budget.
+            'R': 50,
+            'E': 100,  # Internal iteration number
+            'sample_rate': 0.01,  # Sampling rate of each iteration
         },
         'optim_config': {
-            'lr': 0.1  #Learning rate
+            'lr': 0.1  # Learning rate
         },
         'init_config': {
             'init_type': 'xavier',
@@ -86,28 +96,40 @@ if __name__ == '__main__':
             'gpu_ids': [0]
         },
         'model_config': {
-            'name': None,  #The available models see the file models/__init__.py. If None, then adopt the NN model recommended by the dataset.
+            # The available models see the file models/__init__.py. If None, then adopt the NN model recommended by the dataset.
+            'name': None,
         },
         'dp_config': {
-            #Privacy Parameters for (epsilon, delta)-DP
+            # Privacy Parameters for (epsilon, delta)-DP
             'epsilon': 8,
             'delta': 4.0e-4,
             'max_norm': 1.0,
             # If 'isFixedClientT' is True, the iteration number of participants is indicated by using 'ClientT' and sigma is calculated by the private budget and 'ClientT'.
             # Otherwise, use 'sigma' to indicate the amount of noise added by the participant, and 'ClientT' is calculated based on the privacy budget and 'sigma'
             'isFixedClientT': True,
-            'clientT': 20000,    #Only works for isFixedClientT = True
-            'sigma': 1    #Only works for isFixedClientT = False
+            'clientT': 5000,  # Only works for isFixedClientT = True
+            'sigma': 1  # Only works for isFixedClientT = False
         },
         'dpcr_model': {
-            'name': 'AuBCRComp',  #Available DPCR models: AuBCRComp(our method), DPFedAvg (without DPCR), SimpleMech, TwoLevel, BinMech, FDA, BCRG, ABCRG, Honaker
-            'args':{} #Automatic setting by clientT and the DPCR model
+            # Available DPCR models: AuBCRComp(our method), DPFedAvg (without DPCR), SimpleMech, TwoLevel, BinMech, FDA, BCRG, ABCRG, Honaker
+            'name': 'AuBCRComp',
+            'args': {}  # Automatic setting by clientT and the DPCR model
+        },
+        'mia': {
+            'enable': True,  # Whether to enable the membership inference attack (False means it is disabled)
+            # The ID of the victim participant (0 - number of participants), i.e., the target for the membership inference attack
+            'victim_id': 0,
+            # Number of training epochs for the attack model, which is used to perform the membership inference attack
+            'attack_model_epoch': 5,
+            # Number of training epochs for the shadow model, which mimics the behavior of the victim model to aid the attack model
+            'shadow_model_epoch': 10,
+            'mia_momentum': 0  # Momentum statistic for the attack (0 indicates no momentum)
         }
     }
     # Refine the parameter settings.
-    clientT=config['dp_config']['clientT']
-    model_name=config['dpcr_model']['name']
-    dataset_name=config['data_config']['dataset_name']
+    clientT = config['dp_config']['clientT']
+    model_name = config['dpcr_model']['name']
+    dataset_name = config['data_config']['dataset_name']
 
     aggrType = {"DPFedAvg": {},
                 "SimpleMech": {"T": 1},
@@ -119,12 +141,12 @@ if __name__ == '__main__':
                 "ABCRG": {"kOrder": bestK(clientT, lambda x: (2 ** x - 1))},
                 "AuBCRComp": {"T": clientT}
                 }
-    dtArgs={"MNIST":{'model__name':'CNN_Mnist'},
-            "FashionMNIST": {'model__name': 'CNN_Mnist'},
-            "CIFAR10": {'model__name': 'WideResnet10_2'},
+    dtArgs = {"MNIST": {'model__name': 'CNN_Mnist'},
+              "FashionMNIST": {'model__name': 'CNN_Mnist'},
+              "CIFAR10": {'model__name': 'WideResnet10_2'},
               }
 
     config['dpcr_model']['args'].update(aggrType[model_name])
     if config['model_config']['name'] is None:
-        config['model_config']['name']=dtArgs[dataset_name]['model__name']
+        config['model_config']['name'] = dtArgs[dataset_name]['model__name']
     runFLDPCR(config)
