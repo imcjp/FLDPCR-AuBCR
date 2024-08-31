@@ -112,7 +112,7 @@ if __name__ == '__main__':
         },
         'dpcr_model': {
             # Available DPCR models: AuBCRComp(our method), DPFedAvg (without DPCR), SimpleMech, TwoLevel, BinMech, FDA, BCRG, ABCRG, Honaker
-            'name': 'AuBCRComp',
+            'name': 'DPFedAvg',
             'args': {}  # Automatic setting by clientT and the DPCR model
         },
         'mia': {

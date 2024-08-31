@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 ##########################################################################
+# The implements of Membership Inference Attack
+##########################################################################
 import torch
 import torch.nn as nn
 import torch.optim as optim
