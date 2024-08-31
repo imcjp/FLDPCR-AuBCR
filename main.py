@@ -120,9 +120,9 @@ if __name__ == '__main__':
             # The ID of the victim participant (0 - number of participants), i.e., the target for the membership inference attack
             'victim_id': 0,
             # Number of training epochs for the attack model, which is used to perform the membership inference attack
-            'attack_model_epoch': 5,
+            'attack_model_epoch': 50,
             # Number of training epochs for the shadow model, which mimics the behavior of the victim model to aid the attack model
-            'shadow_model_epoch': 10,
+            'shadow_model_epoch': 100,
             'mia_momentum': 0  # Momentum statistic for the attack (0 indicates no momentum)
         }
     }
