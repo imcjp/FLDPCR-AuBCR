@@ -1,0 +1,9 @@
+numpy==1.23.3
+scipy==1.9.1
+tqdm
+tensorboard==2.10.1
+# install by: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+torch
+torchaudio
+torchvision
+opacus==1.1.2

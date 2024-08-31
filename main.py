@@ -116,7 +116,7 @@ if __name__ == '__main__':
             'args': {}  # Automatic setting by clientT and the DPCR model
         },
         'mia': {
-            'enable': True,  # Whether to enable the membership inference attack (False means it is disabled)
+            'enable': False,  # Whether to enable the membership inference attack (False means it is disabled)
             # The ID of the victim participant (0 - number of participants), i.e., the target for the membership inference attack
             'victim_id': 0,
             # Number of training epochs for the attack model, which is used to perform the membership inference attack

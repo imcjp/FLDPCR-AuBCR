@@ -8,13 +8,12 @@ In this project, we design a novel differential privacy continuous data release 
 Thanks to the open sourced [**FLDPCR framework**](https://github.com/imcjp/FLDPCR). Our work is conducted based on the [**FLDPCR framework**]. By introducing the augmented policy matrix, designing the BIT-based DPCR algorithm with consistency (BCRC), and proposing the meta-factor approach, our AuBCR effectively boosts the learning accuracy compared to the state-of-the-art DPCR models.
 
 The software environment of the source code requires **Python3**, and parts of the required packages are as follows:
-* numpy
-* scipy
+* numpy==1.23.3
+* scipy==1.9.1
 * **opacus==1.1.2**
-* torch==1.11.0+cu113
-* torchaudio==0.11.0+cu113
-* torchvision==0.12.0+cu113
-* tensorboard==2.10.1
+* torch
+* torchaudio
+* torchvision
 
 #### Instructions:
 
