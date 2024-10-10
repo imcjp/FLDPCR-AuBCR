@@ -1,8 +1,7 @@
 # FLDPCR-AuBCR
 # Code for "Boosting Accuracy of Differentially Private Continuous Data Release for Federated Learning"
 
-The project is the code for the paper **"Boosting Accuracy of Differentially Private Continuous Data Release for Federated Learning"**.
-
+The project is the code for the paper **"[Boosting Accuracy of Differentially Private Continuous Data Release for Federated Learning](https://ieeexplore.ieee.org/document/10711967)"**.
 In this project, we design a novel differential privacy continuous data release (DPCR) model called augmented BIT-based continuous data release (AuBCR) model.
 
 Thanks to the open sourced [**FLDPCR framework**](https://github.com/imcjp/FLDPCR). Our work is conducted based on the [**FLDPCR framework**]. By introducing the augmented policy matrix, designing the BIT-based DPCR algorithm with consistency (BCRC), and proposing the meta-factor approach, our AuBCR effectively boosts the learning accuracy compared to the state-of-the-art DPCR models.
